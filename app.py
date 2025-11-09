@@ -1,38 +1,43 @@
-import requests, time, concurrent.futures, os
+import os
+import time
+import requests
+import random
 
-API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/responses"
+# ---- CONFIG ----
+API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions"
+API_KEY = os.environ.get("ARK_API_KEY")  # Set in environment (Railway secret)
+MODEL = "seed-translation"
+SOURCE_LANG = "en"
+TARGET_LANG = "vi"
 
-API_KEY = os.getenv("ARK_API_KEY")  # store your API key as env var
+# Example text (you can load bigger content)
+TEXT_SAMPLE = "This is a sample sentence to be translated repeatedly."
 
-headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-
-prompt = "Write a long, detailed story about AI evolution, 5000 words minimum."
-
-payload = {
-    "model": "seed-translation-250915",
-    "messages": [{"role": "user", "content": prompt}],
-    "max_tokens": 4096,
-}
-
-def call_seed16(i):
+# ---- MAIN LOOP ----
+def call_translation_api():
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": f"Translate from {SOURCE_LANG} to {TARGET_LANG}."},
+            {"role": "user", "content": TEXT_SAMPLE}
+        ]
+    }
+    resp = requests.post(API_URL, json=payload, headers=headers)
+    data = resp.json()
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
-        data = response.json()
-        usage = data.get("usage", {}).get("total_tokens", 0)
-        print(f"Request #{i} consumed {usage} tokens.")
-        return usage
-    except Exception as e:
-        print(f"Error in request #{i}: {e}")
-        return 0
+        tokens = data["usage"]["total_tokens"]
+    except Exception:
+        tokens = 0
+    print(f"[{time.ctime()}] ✅ Tokens used this call: {tokens}")
+    return tokens
 
-def run_load_test(concurrency=10, rounds=1000):
-    total_tokens = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
-        futures = [executor.submit(call_seed16, i) for i in range(rounds)]
-        for f in concurrent.futures.as_completed(futures):
-            total_tokens += f.result()
-            print(f"Total tokens so far: {total_tokens:,}")
-    print(f"✅ Load test complete. Total tokens: {total_tokens:,}")
 
 if __name__ == "__main__":
-    run_load_test(concurrency=20, rounds=2000)
+    total_tokens = 0
+    start_time = time.time()
+    while time.time() - start_time < 5 * 3600:  # run for 5 hours
+        tokens = call_translation_api()
+        total_tokens += tokens
+        print(f"Total tokens so far: {total_tokens}")
+        time.sleep(random.uniform(2, 5))  # delay between calls
