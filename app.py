@@ -4,7 +4,7 @@ import requests
 import random
 
 # ---- CONFIG ----
-API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/responses"
+API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions"
 API_KEY = os.environ.get("ARK_API_KEY")  # Set in environment (Railway secret)
 MODEL = "seed-translation-250915"
 SOURCE_LANG = "en"
