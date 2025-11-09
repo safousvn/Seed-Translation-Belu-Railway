@@ -25,7 +25,7 @@ def call_seed16(i):
         print(f"Error in request #{i}: {e}")
         return 0
 
-def run_load_test(concurrency=20, rounds=2000):
+def run_load_test(concurrency=10, rounds=1000):
     total_tokens = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = [executor.submit(call_seed16, i) for i in range(rounds)]
