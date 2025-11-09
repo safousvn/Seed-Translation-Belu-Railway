@@ -11,7 +11,7 @@ SOURCE_LANG = "en"
 TARGET_LANG = "vi"
 
 # Example text (you can load bigger content)
-TEXT_SAMPLE = "This is a sample sentence to be translated repeatedly."
+TEXT_SAMPLE = "This is a sample sentence to be translated : Voice AI models powered by emotional intelligence for creators, developers, and enterprises. Create audio books, podcasts, conversational agents and more."
 
 # ---- MAIN LOOP ----
 def call_translation_api():
