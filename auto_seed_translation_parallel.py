@@ -12,12 +12,12 @@ SOURCE_LANG = "English"
 TARGET_LANG = "Vietnamese"
 TEXT_SAMPLE = (
     "Artificial Intelligence is transforming industries globally and enabling new possibilities "
-    "for automation, creativity, and communication. This text is used to stress-test translation throughput."
+    "for automation, creativity, and communication. This text is used for stress-test translation."
 )
 
 TARGET_TOKENS = 10_000_000  # goal
 TARGET_HOURS = 5            # target time
-AVG_TOKENS_PER_REQ = 1500   # adjust based on your observations
+AVG_TOKENS_PER_REQ = 1500   # adjust based on real usage
 # ==========================================
 
 TOTAL_SECONDS = TARGET_HOURS * 3600
@@ -35,10 +35,8 @@ async def call_translation(client: httpx.AsyncClient, request_id: int):
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Translate the following text from {SOURCE_LANG} to {TARGET_LANG}: {TEXT_SAMPLE}"
-                    }
+                    {"type": "input_text", "text": TEXT_SAMPLE},
+                    {"translation_options": {"source_language": SOURCE_LANG, "target_language": TARGET_LANG}}
                 ]
             }
         ]
@@ -51,6 +49,7 @@ async def call_translation(client: httpx.AsyncClient, request_id: int):
             print(f"[Req {request_id}] ❌ {data['error']['message']}")
             return 0
         tokens = data.get("usage", {}).get("total_tokens", 0)
+        print(f"[Req {request_id}] ✅ +{tokens} tokens")
         return tokens
     except Exception as e:
         print(f"[Req {request_id}] ⚠️ Exception: {e}")
@@ -77,6 +76,7 @@ async def main():
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
     async with httpx.AsyncClient(headers=headers) as client:
+        start_time = datetime.now()
         while total_tokens < TARGET_TOKENS:
             request_counter += 1
 
@@ -102,5 +102,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    start_time = datetime.now()
     asyncio.run(main())
