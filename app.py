@@ -1,44 +1,83 @@
 import os
 import time
 import requests
-import random
+from datetime import datetime
 
-# ---- CONFIG ----
-API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/chat/completions"
-#https://ark.ap-southeast.bytepluses.com/api/v3/responses
-API_KEY = os.environ.get("ARK_API_KEY")  # Set in environment (Railway secret)
-MODEL = "seed-translation-250915"
+# =================== CONFIG ======================
+API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/responses"
+MODEL = "seed-translation"
+API_KEY = os.environ.get("ARK_API_KEY")
+
 SOURCE_LANG = "en"
 TARGET_LANG = "vi"
+TEXT_SAMPLE = "Artificial Intelligence is transforming industries globally and enabling new possibilities."
 
-# Example text (you can load bigger content)
-TEXT_SAMPLE = "This is a sample sentence to be translated repeatedly."
+REQUESTS_PER_MIN = 60       # how many API calls per minute
+MAX_REQUESTS = 5000         # total requests per run
+# =================================================
 
-# ---- MAIN LOOP ----
-def call_translation_api():
-    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+
+def call_seed_translation():
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+
     payload = {
         "model": MODEL,
-        "messages": [
-            {"role": "system", "content": f"Translate from {SOURCE_LANG} to {TARGET_LANG}."},
-            {"role": "user", "content": TEXT_SAMPLE}
-        ]
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": TEXT_SAMPLE}
+                ]
+            }
+        ],
+        "parameters": {
+            "source_language": SOURCE_LANG,
+            "target_language": TARGET_LANG
+        }
     }
-    resp = requests.post(API_URL, json=payload, headers=headers)
-    data = resp.json()
+
     try:
-        tokens = data["usage"]["total_tokens"]
-    except Exception:
-        tokens = 0
-    print(f"[{time.ctime()}] ✅ Tokens used this call: {tokens}")
-    return tokens
+        resp = requests.post(API_URL, headers=headers, json=payload, timeout=10)
+        data = resp.json()
+
+        if "error" in data:
+            return None, data["error"]["message"], 0
+
+        output_text = data["output"][0]["content"][0]["text"]
+        tokens = data.get("usage", {}).get("total_tokens", 0)
+        return output_text, None, tokens
+
+    except Exception as e:
+        return None, str(e), 0
+
+
+def main():
+    if not API_KEY:
+        print("❌ Missing environment variable: ARK_API_KEY")
+        return
+
+    print(f"🚀 Starting Seed Translation Auto-Runner at {datetime.now()}")
+    total_tokens = 0
+    delay = 60 / REQUESTS_PER_MIN
+
+    for i in range(1, MAX_REQUESTS + 1):
+        output, error, tokens = call_seed_translation()
+
+        if error:
+            print(f"[{i}] ❌ Error: {error}")
+            time.sleep(2)
+            continue
+
+        total_tokens += tokens
+        print(f"[{i}] ✅ {tokens} tokens | Total = {total_tokens:,}")
+
+        time.sleep(delay)
+
+    print(f"🏁 Finished {MAX_REQUESTS} requests — Total tokens used: {total_tokens:,}")
 
 
 if __name__ == "__main__":
-    total_tokens = 0
-    start_time = time.time()
-    while time.time() - start_time < 5 * 3600:  # run for 5 hours
-        tokens = call_translation_api()
-        total_tokens += tokens
-        print(f"Total tokens so far: {total_tokens}")
-        time.sleep(random.uniform(2, 5))  # delay between calls
+    main()
