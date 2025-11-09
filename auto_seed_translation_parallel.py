@@ -5,7 +5,7 @@ from datetime import datetime
 
 # ================= CONFIG =================
 API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/responses"
-MODEL = "seed-translation"
+MODEL = "seed-translation-250915"
 API_KEY = os.environ.get("ARK_API_KEY")
 
 SOURCE_LANG = "English"
