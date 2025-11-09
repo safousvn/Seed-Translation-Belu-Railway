@@ -1,2 +1,2 @@
 # Seed Translation Auto Runner
-This Streamlit app automatically calls the ByteDance Seed Translation API and monitors token usage live.
+This app calls ByteDance Seed Translation API repeatedly to simulate usage and measure token consumption.
