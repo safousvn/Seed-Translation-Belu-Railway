@@ -1,31 +1,31 @@
 import os
 import asyncio
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # ================= CONFIG =================
 API_URL = "https://ark.ap-southeast.bytepluses.com/api/v3/responses"
-MODEL = "seed-translation-250915"
+MODEL = "seed-translation"
 API_KEY = os.environ.get("ARK_API_KEY")
 
-SOURCE_LANG = "en"
-TARGET_LANG = "vi"
+SOURCE_LANG = "English"
+TARGET_LANG = "Vietnamese"
 TEXT_SAMPLE = (
     "Artificial Intelligence is transforming industries globally and enabling new possibilities "
-    "for automation, creativity, and communication. This text is used to stress-test token consumption."
+    "for automation, creativity, and communication. This text is used to stress-test translation throughput."
 )
 
-TARGET_TOKENS = 10_000_000      # goal: consume 10M tokens
-TARGET_HOURS = 5                # within 5 hours
+TARGET_TOKENS = 10_000_000  # goal
+TARGET_HOURS = 5            # target time
+AVG_TOKENS_PER_REQ = 1500   # adjust based on your observations
 # ==========================================
 
-# Calculate approximate concurrency
 TOTAL_SECONDS = TARGET_HOURS * 3600
-# Estimate average tokens per request
-AVG_TOKENS_PER_REQ = 1500  # adjust based on real usage
 TOTAL_REQUESTS = TARGET_TOKENS // AVG_TOKENS_PER_REQ
 REQUESTS_PER_SECOND = TOTAL_REQUESTS / TOTAL_SECONDS
-CONCURRENT_REQUESTS = max(10, int(REQUESTS_PER_SECOND * 2))  # double to avoid idle time
+
+# Start with moderate concurrency, adjust dynamically
+INITIAL_CONCURRENT_REQUESTS = max(5, int(REQUESTS_PER_SECOND * 1.5))
 
 
 async def call_translation(client: httpx.AsyncClient, request_id: int):
@@ -35,13 +35,9 @@ async def call_translation(client: httpx.AsyncClient, request_id: int):
             {
                 "role": "user",
                 "content": [
-                    {"type": "input_text", "text": TEXT_SAMPLE},
                     {
-                        "type": "translation_options",
-                        "translation_options": {
-                            "source_language": SOURCE_LANG,
-                            "target_language": TARGET_LANG
-                        }
+                        "type": "input_text",
+                        "text": f"Translate the following text from {SOURCE_LANG} to {TARGET_LANG}: {TEXT_SAMPLE}"
                     }
                 ]
             }
@@ -63,8 +59,7 @@ async def call_translation(client: httpx.AsyncClient, request_id: int):
 
 async def worker(client: httpx.AsyncClient, sem: asyncio.Semaphore, request_id: int):
     async with sem:
-        tokens = await call_translation(client, request_id)
-        return tokens
+        return await call_translation(client, request_id)
 
 
 async def main():
@@ -72,27 +67,40 @@ async def main():
         print("❌ Missing ARK_API_KEY environment variable")
         return
 
-    print(f"🚀 Starting Auto-Scale Seed Translation at {datetime.now()}")
+    print(f"🚀 Starting Auto-Scale Dynamic Seed Translation Runner at {datetime.now()}")
+
     total_tokens = 0
     request_counter = 0
+    concurrency = INITIAL_CONCURRENT_REQUESTS
+    sem = asyncio.Semaphore(concurrency)
 
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-    sem = asyncio.Semaphore(CONCURRENT_REQUESTS)
 
     async with httpx.AsyncClient(headers=headers) as client:
-        start_time = datetime.now()
         while total_tokens < TARGET_TOKENS:
             request_counter += 1
-            tokens = await worker(client, sem, request_counter)
+
+            # Adjust concurrency dynamically every 100 requests
+            if request_counter % 100 == 0:
+                elapsed_minutes = max(1, (datetime.now() - start_time).total_seconds() / 60)
+                tokens_per_minute = total_tokens / elapsed_minutes
+                target_per_minute = TARGET_TOKENS / (TARGET_HOURS * 60)
+                if tokens_per_minute < target_per_minute:
+                    concurrency = min(concurrency + 5, 200)
+                elif tokens_per_minute > target_per_minute * 1.2:
+                    concurrency = max(concurrency - 5, 5)
+                sem = asyncio.Semaphore(concurrency)
+                print(f"⚙️ Adjusted concurrency: {concurrency}, Tokens/min: {int(tokens_per_minute)}")
+
+            task = asyncio.create_task(worker(client, sem, request_counter))
+            tokens = await task
             total_tokens += tokens
-            elapsed = (datetime.now() - start_time).total_seconds() / 60
-            tps = total_tokens / elapsed if elapsed > 0 else 0
 
-            print(f"[{request_counter}] +{tokens} tokens | Total={total_tokens:,} | "
-                  f"Tokens/min≈{int(tps*60)}")
+            print(f"[{request_counter}] +{tokens} tokens | Total={total_tokens:,}")
 
-    print(f"🏁 Goal reached: {total_tokens:,} tokens in {(datetime.now() - start_time)}")
+    print(f"🏁 Target reached: {total_tokens:,} tokens in {(datetime.now() - start_time)}")
 
 
 if __name__ == "__main__":
+    start_time = datetime.now()
     asyncio.run(main())
